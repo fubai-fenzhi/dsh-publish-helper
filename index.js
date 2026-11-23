@@ -13,6 +13,7 @@ import { npmrcLine, publishArgs, recallArgs } from './lib/npm.mjs';
 import { DEFAULT_ORG, orgArgs } from './lib/org.mjs';
 import { preflightPackage } from './lib/preflight.mjs';
 import { listReviewQueue, readReviews, saveReview } from './lib/reviews.mjs';
+import { releasePackage } from './lib/release.mjs';
 import { prepareManifest } from './lib/manifest.mjs';
 import { DEFAULT_SUBMISSIONS_REPO, reviewPullRequest, submitPackage } from './lib/submissions.mjs';
 import { DEFAULT_REGISTRY_REPO, forkAndOpenPr, generateEntry } from './lib/publish.mjs';
@@ -391,6 +392,33 @@ export function apply(ctx, rawConfig) {
       return { text: `${result.action} ${result.name}@${result.version}\n${result.output || 'done'}` };
     },
     presentCall: present('Recall a published version'),
+  });
+
+  ctx.tools.register({
+    name: 'publish_tag',
+    description: 'Bump the package version, upload the directory to its GitHub repository and create a vX.Y.Z tag to trigger the release workflow.',
+    parameters: objectSchema({
+      dir: { type: 'string', description: 'Absolute package directory.' },
+      repo: { type: 'string', description: 'Repository as owner/name; defaults to the package.json repository.' },
+      bump: { type: 'string', enum: ['patch', 'minor', 'major'], description: 'Version bump (default patch).' },
+      version: { type: 'string', description: 'Explicit version instead of a bump.' },
+    }, ['dir']),
+    output: textOutput,
+    async execute(args) {
+      const { token } = await resolveGithubToken(cfg);
+      if (!token) throw new Error('run gh auth login, or save a GitHub token first');
+      const result = await releasePackage({
+        dir: args.dir,
+        token,
+        repo: args.repo,
+        bump: args.bump ?? 'patch',
+        version: args.version,
+      });
+      return {
+        text: `released ${result.repo} ${result.tag}\ncommit: ${result.commit.slice(0, 7)}\nCI 已触发；staging 版本需要在 npm 页面 Approve`,
+      };
+    },
+    presentCall: present('Tag a release'),
   });
 
   ctx.tools.register({
