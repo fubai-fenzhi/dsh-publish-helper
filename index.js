@@ -481,6 +481,11 @@ export function apply(ctx, rawConfig) {
         path,
         content: readFileSync(join(directory, path)).toString('base64'),
       }));
+      const workflowPath = '.github/workflows/release.yml';
+      if (!files.some((file) => file.path === workflowPath)) {
+        const template = readFileSync(new URL('./templates/release.yml', import.meta.url), 'utf8');
+        files.push({ path: workflowPath, content: Buffer.from(template, 'utf8').toString('base64') });
+      }
       const written = await uploadFiles({ token, owner: login, name, files, message: `Upload ${name}` });
       return {
         text: `repo ${login}/${name}\nbranch ${created.defaultBranch}\n${written.length} file(s): ${written.join(', ')}`,
