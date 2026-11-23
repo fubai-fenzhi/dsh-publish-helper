@@ -4,9 +4,10 @@ import test from 'node:test';
 
 const template = readFileSync(new URL('../templates/release.yml', import.meta.url), 'utf8');
 
-test('release template triggers on tags and uses trusted publishing', () => {
+test('release template triggers on tags and publishes with provenance', () => {
   assert.match(template, /tags:\s*\n\s*- 'v\*'/);
   assert.match(template, /id-token: write/);
   assert.match(template, /npm publish --provenance --access public/);
+  assert.match(template, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
   assert.match(template, /Verify the tag matches package\.json/);
 });
