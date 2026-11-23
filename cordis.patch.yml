@@ -1,0 +1,3 @@
+- insert:
+    - id: publish-helper
+      name: dsh-publish-helper
