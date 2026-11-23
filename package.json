@@ -1,0 +1,58 @@
+{
+  "name": "dsh-publish-helper",
+  "version": "0.21.0",
+  "description": "DSH plugin publishing assistant: discover by topic, check listing readiness, generate the registry entry, open the pull request and show a settings page.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./lib/*": "./lib/*"
+  },
+  "bin": {
+    "dsh-publish-helper": "bin/publish-helper.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "fubai-fenzhi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fubai-fenzhi/dsh-publish-helper.git"
+  },
+  "homepage": "https://github.com/fubai-fenzhi/dsh-publish-helper",
+  "bugs": {
+    "url": "https://github.com/fubai-fenzhi/dsh-publish-helper/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "publish",
+    "registry",
+    "npm"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "bin",
+    "cordis.patch.yml",
+    "README.md",
+    "templates",
+    "LICENSE"
+  ]
+}
