@@ -31,6 +31,8 @@ test('forkAndOpenPr creates the entry file and opens a pull request', async () =
     if (url.endsWith('/repos/u/awesome-dsh-plugin')) return response(200, { full_name: 'u/awesome-dsh-plugin' });
     if (url.endsWith('/compare/main...u:main')) return response(200, { behind_by: 3 });
     if (url.endsWith('/repos/u/awesome-dsh-plugin/merge-upstream')) return response(200, { message: 'merged' });
+    if (url.endsWith('/git/ref/heads/main')) return response(200, { object: { sha: 'base' } });
+    if (url.endsWith('/git/refs')) return response(201, { ref: 'refs/heads/x' });
     if (url.includes('/contents/data/plugins/o__r.yml')) {
       if (init.method === 'PUT') return response(201, { content: {} });
       return response(404, {});
@@ -74,6 +76,8 @@ test('forkAndOpenPr leaves an up-to-date fork alone', async () => {
     if (url.endsWith('/forks')) return response(202, {});
     if (url.endsWith('/repos/u/awesome-dsh-plugin')) return response(200, { full_name: 'u/awesome-dsh-plugin' });
     if (url.endsWith('/compare/main...u:main')) return response(200, { behind_by: 0 });
+    if (url.endsWith('/git/ref/heads/main')) return response(200, { object: { sha: 'base' } });
+    if (url.endsWith('/git/refs')) return response(201, { ref: 'refs/heads/x' });
     if (url.includes('/contents/data/plugins/o__r.yml')) {
       if (init.method === 'PUT') return response(201, { content: {} });
       return response(404, {});
