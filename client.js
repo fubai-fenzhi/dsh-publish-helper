@@ -67,6 +67,11 @@ window.__ModuleLoader__.load({
       const [selectedPr, setSelectedPr] = React.useState(null);
       const [reviewBusy, setReviewBusy] = React.useState(false);
       const [reviewReport, setReviewReport] = React.useState('');
+      const [history, setHistory] = React.useState([]);
+      const [historyBusy, setHistoryBusy] = React.useState(false);
+      const [historyError, setHistoryError] = React.useState('');
+      const [historyPr, setHistoryPr] = React.useState(null);
+      const [historyReport, setHistoryReport] = React.useState('');
 
       React.useEffect(() => {
         fetch('/dsh-publish-helper/config')
@@ -96,6 +101,7 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         loadQueue();
+        loadHistory();
       }, []);
 
       const polling = shouldPoll(queue, reviewBusy);
@@ -105,8 +111,22 @@ window.__ModuleLoader__.load({
         return () => clearInterval(timer);
       }, [polling]);
 
-      const runReview = async (pr) => {
-        setSelectedPr(pr);
+      const loadHistory = async () => {
+        setHistoryBusy(true);
+        setHistoryError('');
+        try {
+          const response = await fetch('/dsh-publish-helper/review-history');
+          const data = await response.json();
+          if (!response.ok) throw new Error(String(data.error ?? `HTTP ${response.status}`));
+          setHistory(data.items ?? []);
+        } catch (cause) {
+          setHistoryError(String(cause));
+        } finally {
+          setHistoryBusy(false);
+        }
+      };
+
+      const runReview = async (pr) => {        setSelectedPr(pr);
         setReviewBusy(true);
         setReviewReport('');
         try {
@@ -119,6 +139,7 @@ window.__ModuleLoader__.load({
           if (!response.ok) throw new Error(String(data.error ?? `HTTP ${response.status}`));
           setReviewReport(data.report ?? '');
           await loadQueue();
+          await loadHistory();
         } catch (cause) {
           setReviewReport('失败：' + String(cause));
         } finally {
@@ -251,7 +272,8 @@ window.__ModuleLoader__.load({
               key: item.pr,
               style: { display: 'grid', gap: '2px', padding: '6px 0', borderTop: '1px solid rgba(127,127,127,.15)' },
             },
-              h('div', { style: { fontSize: '13px' } }, '#' + item.pr + ' ' + item.title),
+              h('div', { style: { fontSize: '13px' } },
+                (item.repo ? item.repo.split('/').pop() + '#' : '#') + item.pr + ' ' + item.title),
               h('div', { style: { ...mono, opacity: 0.7 } },
                 item.author + ' · ' + item.sha.slice(0, 7) + ' · CI ' + item.checks + ' · ' + (item.reviewed ? '已审' : '未审')),
               h('div', { style: { display: 'flex', gap: '8px', marginTop: '4px' } },
@@ -266,6 +288,41 @@ window.__ModuleLoader__.load({
               selectedPr === item.pr && (reviewBusy || reviewReport)
                 ? h('div', { style: { ...mono, whiteSpace: 'pre-wrap', maxHeight: '200px', overflow: 'auto', marginTop: '4px' } },
                   reviewBusy ? '审核中（下载代码 + preflight）…' : reviewReport)
+                : null,
+            ))),
+        ),
+
+        h('details', { style: { borderTop: '1px solid rgba(127,127,127,.3)', paddingTop: '8px' } },
+          h('summary', { style: summary },
+            '审核历史（' + history.length + '）' + (historyBusy ? ' · 读取中…' : '')),
+          h('div', { style: { display: 'grid', gap: '6px', marginTop: '8px' } },
+            h('button', { onClick: loadHistory, disabled: historyBusy },
+              historyBusy ? '刷新中…' : '刷新历史'),
+            historyError ? h('p', { style: { color: 'crimson', margin: 0 } }, historyError) : null,
+            history.length === 0 ? h('div', { style: { ...mono, opacity: 0.7 } }, '暂无历史记录') : null,
+            ...history.map((item) => h('div', {
+              key: item.repo + '#' + item.pr,
+              style: { display: 'grid', gap: '2px', padding: '6px 0', borderTop: '1px solid rgba(127,127,127,.15)' },
+            },
+              h('div', { style: { fontSize: '13px' } },
+                (item.repo ? item.repo.split('/').pop() + '#' : '#') + item.pr),
+              h('div', { style: { ...mono, opacity: 0.7 } },
+                String(item.sha ?? '').slice(0, 7) + ' · ' + (item.at ?? '') + ' · ' + (item.ok ? 'PASS' : '有 FAIL')),
+              h('div', { style: { display: 'flex', gap: '8px', marginTop: '4px' } },
+                h('button', {
+                  onClick: () => {
+                    setHistoryPr(item.pr);
+                    setHistoryReport(item.report ?? '');
+                  },
+                }, '查看报告'),
+                h('a', {
+                  href: 'https://github.com/' + item.repo + '/pull/' + item.pr,
+                  target: '_blank',
+                  rel: 'noreferrer',
+                  style: { fontSize: '12px', alignSelf: 'center' },
+                }, '打开 PR')),
+              historyPr === item.pr && historyReport
+                ? h('div', { style: { ...mono, whiteSpace: 'pre-wrap', maxHeight: '200px', overflow: 'auto', marginTop: '4px' } }, historyReport)
                 : null,
             ))),
         ),
