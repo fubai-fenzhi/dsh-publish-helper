@@ -11,12 +11,15 @@ test('npmrcLine authenticates against the registry host', () => {
   );
 });
 
-test('publishArgs publishes publicly with an optional OTP', () => {
-  assert.deepEqual(publishArgs(), ['publish', '--access', 'public', '--tag', 'latest']);
-  assert.deepEqual(publishArgs({ tag: 'next' }), ['publish', '--access', 'public', '--tag', 'next']);
+test('publishArgs publishes publicly with no lifecycle scripts and an optional OTP', () => {
+  assert.deepEqual(publishArgs(), ['publish', '--ignore-scripts', '--access', 'public', '--tag', 'latest']);
+  assert.deepEqual(
+    publishArgs({ tag: 'next' }),
+    ['publish', '--ignore-scripts', '--access', 'public', '--tag', 'next'],
+  );
   assert.deepEqual(
     publishArgs({ tag: 'latest', otp: '123456' }),
-    ['publish', '--access', 'public', '--tag', 'latest', '--otp', '123456'],
+    ['publish', '--ignore-scripts', '--access', 'public', '--tag', 'latest', '--otp', '123456'],
   );
 });
 
