@@ -694,15 +694,34 @@ export function apply(ctx, rawConfig) {
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: '/dsh-publish-helper/review-queue',
-    resource: async () => {
+    resource: async (request) => {
+      const url = new URL(request.url);
+      const local = readLocalConfig();
+      const param = url.searchParams.get('repos');
+      const repos = (param ? param.split(',') : local.reviewRepos)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const targets = repos.length ? repos : [DEFAULT_SUBMISSIONS_REPO];
       const { token } = await resolveGithubToken(cfg);
       if (!token) return Response.json({ error: 'run gh auth login first' }, { status: 400 });
       try {
-        const items = await listReviewQueue({ repo: DEFAULT_SUBMISSIONS_REPO, token, reviews: readReviews() });
-        return Response.json({ repo: DEFAULT_SUBMISSIONS_REPO, items });
+        const items = await listReviewQueue({ repos: targets, token, reviews: readReviews() });
+        return Response.json({ repos: targets, items });
       } catch (error) {
         return Response.json({ error: String(error) }, { status: 500 });
       }
+    },
+  }));
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh-publish-helper/review-history',
+    resource: async () => {
+      const items = readReviews()
+        .slice()
+        .sort((left, right) => String(right.at).localeCompare(String(left.at)))
+        .slice(0, 50);
+      return Response.json({ items });
     },
   }));
 
@@ -720,7 +739,8 @@ export function apply(ctx, rawConfig) {
       const url = new URL(req.url, 'http://127.0.0.1');
       if (req.method === 'GET') {
         const pr = Number(url.searchParams.get('pr'));
-        const record = readReviews().find((item) => item.repo === DEFAULT_SUBMISSIONS_REPO && item.pr === pr);
+        const repo = url.searchParams.get('repo') || DEFAULT_SUBMISSIONS_REPO;
+        const record = readReviews().find((item) => item.repo === repo && item.pr === pr);
         if (!record) {
           res.statusCode = 404;
           res.end(JSON.stringify({ error: 'no stored review for this PR' }));
@@ -808,6 +828,7 @@ export function apply(ctx, rawConfig) {
           registryRepo: cfg.registryRepo,
           localRegistryRepo: local.registryRepo || null,
           npmUser: local.npmUser || '',
+          reviewRepos: local.reviewRepos || [],
         }));
         return;
       }
@@ -821,6 +842,14 @@ export function apply(ctx, rawConfig) {
             ...(typeof patch.registryRepo === 'string' ? { registryRepo: patch.registryRepo.trim() } : {}),
             ...(typeof patch.npmUser === 'string' ? { npmUser: patch.npmUser.trim() } : {}),
             ...(typeof patch.npmToken === 'string' ? { npmToken: patch.npmToken.trim() } : {}),
+            ...(Array.isArray(patch.reviewRepos)
+              ? {
+                reviewRepos: patch.reviewRepos
+                  .filter((item) => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              }
+              : {}),
           });
           res.end(JSON.stringify({ ok: true }));
         } catch (error) {
