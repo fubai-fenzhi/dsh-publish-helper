@@ -8,7 +8,13 @@ import { readLocalConfig, writeLocalConfig } from '../lib/config.mjs';
 
 test('readLocalConfig is empty for a missing file', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-ph-config-'));
-  assert.deepEqual(readLocalConfig(join(root, 'missing.json')), { token: '', registryRepo: '', npmUser: '', npmToken: '' });
+  assert.deepEqual(readLocalConfig(join(root, 'missing.json')), {
+    token: '',
+    registryRepo: '',
+    npmUser: '',
+    npmToken: '',
+    reviewRepos: [],
+  });
   rmSync(root, { recursive: true, force: true });
 });
 
