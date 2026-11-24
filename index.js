@@ -33,7 +33,34 @@ function normalize(raw) {
       ? source.registryRepo.trim()
       : DEFAULT_REGISTRY_REPO,
     guide: source.guide !== false,
+    publishingMode: source.publishingMode === 'author' ? 'author' : 'maintainer',
+    maintainer: typeof source.maintainer === 'string' && source.maintainer.trim()
+      ? source.maintainer.trim()
+      : 'fubai-fenzhi',
   };
+}
+
+function isMaintainerMode(cfg) {
+  return cfg.publishingMode === 'maintainer';
+}
+
+/** In maintainer mode, publishing/submitting must run under the configured maintainer identity. */
+async function enforceGithubMaintainer(cfg, token) {
+  if (!isMaintainerMode(cfg)) return;
+  const login = await getLogin({ token });
+  if (login !== cfg.maintainer) {
+    throw new Error(`此部署只允许用维护者账号 ${cfg.maintainer} 提交/发布（当前 GitHub 登录：${login}）`);
+  }
+}
+
+async function enforceNpmMaintainer(cfg) {
+  if (!isMaintainerMode(cfg)) return;
+  const { token } = resolveNpmToken();
+  if (!token) throw new Error('npm token not found: run npm login (writes ~/.npmrc), or set NPM_TOKEN');
+  const user = await npmWhoami({ token });
+  if (user !== cfg.maintainer) {
+    throw new Error(`此部署只允许用维护者账号 ${cfg.maintainer} 发布 npm（当前 npm 登录：${user ?? 'unknown'}）`);
+  }
 }
 
 /**
@@ -348,6 +375,7 @@ export function apply(ctx, rawConfig) {
     }, ['dir']),
     output: textOutput,
     async execute(args) {
+      await enforceNpmMaintainer(cfg);
       const result = await publishDirectory({ dir: args.dir, tag: args.tag, otp: args.otp, force: args.force === true });
       return { text: `${result.name}@${result.version}\n${result.output || 'published'}` };
     },
@@ -534,6 +562,7 @@ export function apply(ctx, rawConfig) {
     async execute(args) {
       const { token } = await resolveGithubToken(cfg);
       if (!token) throw new Error('run gh auth login, or save a GitHub token first');
+      await enforceGithubMaintainer(cfg, token);
       const result = await submitPackage({ dir: args.dir, token, title: args.title, body: args.body });
       return { text: `PR #${result.pr.number} ${result.pr.state}\n${result.pr.url}\nbranch: ${result.branch}\nfiles: ${result.files}` };
     },
