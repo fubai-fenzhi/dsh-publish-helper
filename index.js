@@ -9,6 +9,7 @@ import { readNpmrcToken } from './lib/credentials.mjs';
 import { checkPlugin, repoFromUrl, resolveRepo, searchTopic } from './lib/discover.mjs';
 import { AGENT_GUIDE, SECTION_NAME, SUBMISSION_SPEC } from './lib/guide.mjs';
 import { appendPublishLog } from './lib/log.mjs';
+import { inboxDir, intakeZip, listInbox } from './lib/intake.mjs';
 import { npmrcLine, publishArgs, recallArgs } from './lib/npm.mjs';
 import { DEFAULT_ORG, orgArgs } from './lib/org.mjs';
 import { preflightPackage } from './lib/preflight.mjs';
@@ -33,7 +34,7 @@ function normalize(raw) {
       ? source.registryRepo.trim()
       : DEFAULT_REGISTRY_REPO,
     guide: source.guide !== false,
-    publishingMode: source.publishingMode === 'author' ? 'author' : 'maintainer',
+    publishingMode: source.publishingMode === 'maintainer' ? 'maintainer' : 'author',
     maintainer: typeof source.maintainer === 'string' && source.maintainer.trim()
       ? source.maintainer.trim()
       : 'fubai-fenzhi',
@@ -366,7 +367,7 @@ export function apply(ctx, rawConfig) {
 
   ctx.tools.register({
     name: 'publish_npm',
-    description: 'Publish a package directory to npm now with the resolved npm token (npm publish --access public). Use it after bumping the version; pass otp when the token does not bypass 2FA.',
+    description: 'Publish a package directory to npm now with the resolved npm token (npm publish --ignore-scripts --access public). Use it after bumping the version; pass otp when the token does not bypass 2FA.',
     parameters: objectSchema({
       dir: { type: 'string', description: 'Absolute package directory to publish.' },
       tag: { type: 'string', description: 'npm dist-tag (default: latest).' },
@@ -593,6 +594,34 @@ export function apply(ctx, rawConfig) {
   });
 
   ctx.tools.register({
+    name: 'publish_intake',
+    description: 'List the local submission inbox, or safely extract a zip into it and run preflight. Nothing is executed.',
+    parameters: objectSchema({
+      zip: { type: 'string', description: 'Absolute path to a zip in the inbox; omitted lists the inbox.' },
+    }),
+    output: textOutput,
+    async execute(args) {
+      const dir = inboxDir();
+      if (!args.zip) {
+        const items = listInbox(dir);
+        const lines = [`inbox: ${dir}`];
+        if (items.length === 0) lines.push('(empty)');
+        for (const item of items) {
+          lines.push(`${item.directory ? 'dir' : 'zip'}\t${item.name}\t${item.size}B`);
+        }
+        return { text: lines.join('\n') };
+      }
+      const result = await intakeZip({ zip: String(args.zip), root: dir, run: runCommand });
+      const lines = [`extracted: ${result.dir}`, result.preflight.ok ? 'PASS' : 'FAIL'];
+      for (const check of result.preflight.checks.filter((item) => !item.ok)) {
+        lines.push(`FAIL ${check.id}: ${check.detail}`);
+      }
+      return { text: lines.join('\n') };
+    },
+    presentCall: present('Intake submission'),
+  });
+
+  ctx.tools.register({
     name: 'publish_spec',
     description: 'Return the DSH plugin submission spec: required package fields, forbidden patterns, publish flow and recall rules.',
     parameters: objectSchema({}),
@@ -716,6 +745,43 @@ export function apply(ctx, rawConfig) {
       } catch (error) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: String(error).replace(/^Error:\s*/, '') }));
+      }
+    },
+  }));
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/dsh-publish-helper/intake',
+    handler: async (req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      const dir = inboxDir();
+      try {
+        if (req.method === 'GET') {
+          res.end(JSON.stringify({ dir, items: listInbox(dir) }));
+          return;
+        }
+        if (req.method === 'POST') {
+          let raw = '';
+          for await (const chunk of req) raw += chunk;
+          const body = JSON.parse(raw || '{}');
+          if (typeof body.zip !== 'string' || !body.zip.trim()) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'zip path is required' }));
+            return;
+          }
+          const result = await intakeZip({ zip: body.zip.trim(), root: dir, run: runCommand });
+          res.end(JSON.stringify({
+            ok: result.preflight.ok,
+            dir: result.dir,
+            checks: result.preflight.checks,
+          }));
+          return;
+        }
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: 'method not allowed' }));
+      } catch (error) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: String(error) }));
       }
     },
   }));
