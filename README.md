@@ -72,6 +72,21 @@ submissions/<pkg>/
 - 报告缓存到 `~/.dsh/publish-helper-reviews.json`，关掉面板也能再看
 - 「打开 PR」跳到 GitHub 做最终 review / Merge
 
+## 无账号入口（收件箱）
+
+作者没有 GitHub 账号时，把 zip 放进收件箱目录即可：
+
+```text
+~/.dsh/publish-helper-inbox/
+```
+
+面板「提交入口（无账号）」或工具 `publish_intake`：
+
+- 扫描收件箱
+- 对 zip 做**安全解压**（先校验条目，拒绝 `..`/绝对路径/盘符）
+- 自动跑 `publish_preflight`
+- **只读，不执行任何包代码**
+
 ## 一键发布（面板）
 
 一个包一次，点一下就完成「自检 + 发布」：
