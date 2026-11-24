@@ -72,6 +72,11 @@ window.__ModuleLoader__.load({
       const [historyError, setHistoryError] = React.useState('');
       const [historyPr, setHistoryPr] = React.useState(null);
       const [historyReport, setHistoryReport] = React.useState('');
+      const [intakeDir, setIntakeDir] = React.useState('');
+      const [intakeItems, setIntakeItems] = React.useState([]);
+      const [intakeBusy, setIntakeBusy] = React.useState(false);
+      const [intakeError, setIntakeError] = React.useState('');
+      const [intakeResult, setIntakeResult] = React.useState(null);
 
       React.useEffect(() => {
         fetch('/dsh-publish-helper/config')
@@ -102,6 +107,7 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         loadQueue();
         loadHistory();
+        loadIntake();
       }, []);
 
       const polling = shouldPoll(queue, reviewBusy);
@@ -123,6 +129,42 @@ window.__ModuleLoader__.load({
           setHistoryError(String(cause));
         } finally {
           setHistoryBusy(false);
+        }
+      };
+
+      const loadIntake = async () => {
+        setIntakeBusy(true);
+        setIntakeError('');
+        try {
+          const response = await fetch('/dsh-publish-helper/intake');
+          const data = await response.json();
+          if (!response.ok) throw new Error(String(data.error ?? `HTTP ${response.status}`));
+          setIntakeDir(data.dir ?? '');
+          setIntakeItems(data.items ?? []);
+        } catch (cause) {
+          setIntakeError(String(cause));
+        } finally {
+          setIntakeBusy(false);
+        }
+      };
+
+      const runIntake = async (zip) => {
+        setIntakeBusy(true);
+        setIntakeError('');
+        setIntakeResult(null);
+        try {
+          const response = await fetch('/dsh-publish-helper/intake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ zip }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(String(data.error ?? `HTTP ${response.status}`));
+          setIntakeResult(data);
+        } catch (cause) {
+          setIntakeError(String(cause));
+        } finally {
+          setIntakeBusy(false);
         }
       };
 
@@ -256,6 +298,36 @@ window.__ModuleLoader__.load({
           '一个包一次：先按提交规范自检，通过后一键发到 npm。'),
         h('div', { style: { ...mono, opacity: 0.8 } }, githubLine),
         h('div', { style: { ...mono, opacity: 0.8 } }, npmLine),
+
+        h('details', { style: { borderTop: '1px solid rgba(127,127,127,.3)', paddingTop: '8px' } },
+          h('summary', { style: summary },
+            '提交入口（无账号）' + (intakeItems.length ? '（' + intakeItems.length + '）' : '')),
+          h('div', { style: { display: 'grid', gap: '6px', marginTop: '8px' } },
+            h('div', { style: { ...mono, opacity: 0.7 } }, '收件箱：' + (intakeDir || '…')),
+            h('div', { style: { display: 'flex', gap: '8px' } },
+              h('button', { onClick: loadIntake, disabled: intakeBusy }, intakeBusy ? '扫描中…' : '扫描收件箱')),
+            intakeError ? h('p', { style: { color: 'crimson', margin: 0 } }, intakeError) : null,
+            intakeItems.length === 0
+              ? h('div', { style: { ...mono, opacity: 0.7 } }, '收件箱为空：把作者发来的 zip 放进上面的目录')
+              : null,
+            ...intakeItems.map((item) => h('div', {
+              key: item.path,
+              style: { display: 'grid', gap: '2px', padding: '6px 0', borderTop: '1px solid rgba(127,127,127,.15)' },
+            },
+              h('div', { style: { fontSize: '13px' } }, item.name + (item.directory ? '（目录）' : '')),
+              h('div', { style: { ...mono, opacity: 0.7 } }, item.size + 'B · ' + item.updatedAt),
+              String(item.name).toLowerCase().endsWith('.zip')
+                ? h('button', { onClick: () => runIntake(item.path), disabled: intakeBusy }, '导入并预检')
+                : null)),
+            intakeResult
+              ? h('div', { style: { display: 'grid', gap: '3px', marginTop: '4px' } },
+                h('div', { style: { ...mono, opacity: 0.8 } }, 'extracted: ' + intakeResult.dir),
+                ...(intakeResult.checks ?? []).map((entry) => h('div', {
+                  key: entry.id,
+                  style: { ...mono, color: entry.ok ? 'inherit' : 'crimson' },
+                }, `${entry.ok ? 'OK  ' : 'FAIL'} ${entry.id} — ${entry.detail}`)))
+              : null),
+        ),
 
         h('details', { open: true, style: { borderTop: '1px solid rgba(127,127,127,.3)', paddingTop: '8px' } },
           h('summary', { style: summary },
