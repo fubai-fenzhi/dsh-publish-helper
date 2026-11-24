@@ -91,26 +91,29 @@ token、tag、OTP、扫描都收在「高级」折叠里，默认界面只有包
 
 面板只显示「已连接（gh CLI / ~/.npmrc）」，**不回显 token 值**；token 也不进对话。
 
-## GitHub Actions + Trusted Publishing（A：推荐）
+## 发版（默认：tag → CI → npm）
 
-```bash
-# 把模板写进包目录
-node bin/publish-helper.mjs workflow ./my-plugin
+在插件里一条命令完成「升版 + 上传仓库 + 打 tag + 触发 CI」：
+
+```text
+publish_tag dir=E:\path\to\my-plugin bump=patch
 ```
 
-然后在 npm 包页面 → **Settings → Trusted publishing** 绑定 GitHub 仓库 + workflow 文件名 `release.yml`。
+CI（`.github/workflows/release.yml`）会：
 
-之后：
+1. 校验 tag 与 `package.json` 版本一致
+2. 跑 `test/*.test.mjs`
+3. `npm publish --provenance --access public`
 
-```bash
-git tag v0.2.0
-git push --tags
-```
+需要仓库 secret `NPM_TOKEN`（granular token，Read and write + Bypass 2FA）。
 
-CI 跑测试 → `npm publish --provenance`，**零 token、零 OTP、带 provenance**。
+### Trusted Publishing（可选，替代 token）
 
-- 首次发布一般要先本地/CI 发一次把包建出来，再开 trusted publishing
-- workflow 需要较新的 npm CLI（模板里会 `npm install -g npm@latest`）
+如果 npm 账号能开 2FA，可在包页面 → **Settings → Trusted publishing** 绑定仓库 + `release.yml`，
+然后把发布步骤的 `NODE_AUTH_TOKEN` 去掉，改用 OIDC（零 token、零 OTP）。
+
+- 首次发布一般要先本地发一次把包建出来
+- workflow 使用较新的 npm CLI（模板会 `npm install -g npm@latest`）
 
 ## 撤回
 
