@@ -8,6 +8,7 @@ import { readLocalConfig, writeLocalConfig } from './lib/config.mjs';
 import { readNpmrcToken } from './lib/credentials.mjs';
 import { checkPlugin, repoFromUrl, resolveRepo, searchTopic } from './lib/discover.mjs';
 import { AGENT_GUIDE, SECTION_NAME, SUBMISSION_SPEC } from './lib/guide.mjs';
+import { SKILL_REGISTRATION } from './lib/skill.mjs';
 import { appendPublishLog } from './lib/log.mjs';
 import { inboxDir, intakeZip, listInbox } from './lib/intake.mjs';
 import { npmrcLine, publishArgs, recallArgs } from './lib/npm.mjs';
@@ -242,6 +243,10 @@ export function apply(ctx, rawConfig) {
       return () => off();
     });
   }
+
+  // The release SOP is loaded on demand as a skill instead of living in the prompt.
+  const skills = ctx.get('skills');
+  if (skills) ctx.effect(() => skills.register(SKILL_REGISTRATION));
 
   ctx.tools.register({
     name: 'publish_discover',
