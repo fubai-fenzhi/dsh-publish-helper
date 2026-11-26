@@ -1,6 +1,6 @@
 {
   "name": "dsh-publish-helper",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "DSH plugin publishing assistant: discover by topic, check listing readiness, generate the registry entry, open the pull request and show a settings page.",
   "type": "module",
   "main": "index.js",
@@ -53,6 +53,7 @@
     "cordis.patch.yml",
     "README.md",
     "templates",
+    "docs",
     "LICENSE"
   ]
 }
