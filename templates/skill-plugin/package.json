@@ -1,0 +1,24 @@
+{
+  "name": "dsh-example-skill-plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Example DSH bundle that pairs one on-demand skill with one tool: replace the names and descriptions, then publish.",
+  "license": "MIT",
+  "author": "your-npm-name",
+  "homepage": "https://github.com/your-npm-name/dsh-example-skill-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-npm-name/dsh-example-skill-plugin.git"
+  },
+  "keywords": ["dsh", "dsh-plugin", "deepseek-harness"],
+  "engines": {
+    "node": ">=18",
+    "dsh": ">=0.2.1-rc.3"
+  },
+  "publishConfig": { "access": "public" },
+  "exports": { ".": "./index.js" },
+  "files": ["index.js", "lib/*.mjs", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}
