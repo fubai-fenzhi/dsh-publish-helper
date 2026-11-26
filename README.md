@@ -2,6 +2,10 @@
 
 DSH 插件上架 / 发布 / 撤回助手：发现、检查、生成 entry、开 PR、一键发布 npm、按版本撤回。
 
+## 自带技能
+
+插件在运行时注册 **`publish-release`** 技能（按需加载，不占常驻 token）：preflight → 收录检查 → 建仓库 → npm 发布（staging 审核）→ entry/PR → 撤回。含 BOM、占名、stale fork、2FA 限制等坑。
+
 ## 安装
 
 ```bash
