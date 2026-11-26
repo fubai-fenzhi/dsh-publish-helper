@@ -9,6 +9,7 @@ import { readNpmrcToken } from './lib/credentials.mjs';
 import { checkPlugin, repoFromUrl, resolveRepo, searchTopic } from './lib/discover.mjs';
 import { AGENT_GUIDE, SECTION_NAME, SUBMISSION_SPEC } from './lib/guide.mjs';
 import { SKILL_REGISTRATION } from './lib/skill.mjs';
+import { WORKFLOW_MODES, workflowText } from './lib/workflow.mjs';
 import { appendPublishLog } from './lib/log.mjs';
 import { inboxDir, intakeZip, listInbox } from './lib/intake.mjs';
 import { npmrcLine, publishArgs, recallArgs } from './lib/npm.mjs';
@@ -475,19 +476,24 @@ export function apply(ctx, rawConfig) {
 
   ctx.tools.register({
     name: 'publish_workflow',
-    description: 'Write the GitHub Actions trusted-publishing workflow into a local package directory (.github/workflows/release.yml).',
+    description: 'Write the GitHub Actions release workflow into a local package directory (.github/workflows/release.yml). Default mode trusted: npm publishes through GitHub OIDC with provenance and no long-lived token; mode token injects NODE_AUTH_TOKEN from the NPM_TOKEN secret.',
     parameters: objectSchema({
       dir: { type: 'string', description: 'Absolute package directory.' },
+      mode: { type: 'string', enum: WORKFLOW_MODES, description: 'trusted (default, needs npm Trusted Publisher) or token (needs the NPM_TOKEN secret).' },
     }, ['dir']),
     output: textOutput,
     async execute(args) {
       const directory = String(args.dir);
       if (!existsSync(join(directory, 'package.json'))) throw new Error(`no package.json in ${directory}`);
-      const template = readFileSync(new URL('./templates/release.yml', import.meta.url), 'utf8');
+      const mode = args.mode ?? 'trusted';
+      const template = workflowText(mode);
       const target = join(directory, '.github', 'workflows', 'release.yml');
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, template, 'utf8');
-      return { text: `wrote ${target}` };
+      const hint = mode === 'trusted'
+        ? 'configure npm -> package -> Settings -> Trusted publishing (GitHub Actions, this repo, release.yml), then push a v* tag'
+        : 'add the repository secret NPM_TOKEN, then push a v* tag';
+      return { text: `wrote ${target}\nmode: ${mode}\nnext: ${hint}` };
     },
     presentCall: present('Write release workflow'),
   });
