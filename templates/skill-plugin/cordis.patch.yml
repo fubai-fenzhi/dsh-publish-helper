@@ -1,0 +1,3 @@
+- insert:
+    - id: example-skill-plugin
+      name: dsh-example-skill-plugin
