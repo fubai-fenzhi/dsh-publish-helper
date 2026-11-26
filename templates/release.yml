@@ -1,12 +1,18 @@
 # Copy to .github/workflows/release.yml in the package repository.
 #
-# Token publishing (default here):
-#   add a repository secret NPM_TOKEN = granular npm token
-#   (Read and write, Bypass 2FA; never commit it) and push a tag.
+# Two publishing modes (pick one):
 #
-# Trusted publishing alternative (no token, needs account 2FA on npm):
-#   package page -> Settings -> Trusted publishing -> GitHub Actions
-#   then remove the NODE_AUTH_TOKEN env from the publish step.
+#   trusted (default, no long-lived token):
+#     1. npm package page -> Settings -> Trusted publishing -> GitHub Actions,
+#        publisher = this repository, workflow = release.yml, environment = (empty)
+#     2. push a v* tag; npm exchanges the GitHub OIDC token for a short-lived credential
+#
+#   token (fallback):
+#     add a repository secret NPM_TOKEN = granular npm token
+#     (Read and write, Bypass 2FA; never commit it) and push a v* tag
+#
+# Granular tokens that bypass 2FA cannot unpublish and are being restricted for
+# direct publishing, so prefer trusted publishing when the npm account has 2FA.
 name: release
 
 on:
@@ -17,7 +23,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # provenance attestation
+  id-token: write # required for provenance and trusted publishing
 
 jobs:
   publish:
@@ -59,5 +65,4 @@ jobs:
 
       - name: Publish with provenance
         run: npm publish --provenance --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+__NODE_AUTH_ENV__
