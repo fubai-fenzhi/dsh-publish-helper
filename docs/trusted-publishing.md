@@ -31,6 +31,29 @@
 - 可要求每次发布在 GitHub environment 上**人工审批**（environment reviewers）
 - 可下架 / 转回自己发；维护者不持有任何长期凭证
 
+## 分阶段发布（staged publish）
+
+若要让维护者保留「最后批准」这一关，工作流应使用 **`npm stage publish`** 而不是 `npm publish`：
+
+- 需要 npm CLI **11.15.0+**、Node **22.14+**
+- 包进入 npm 的 Staged Packages，保持**非公开**
+- 维护者用 2FA 批准后才真正公开：
+  - `npm stage approve <stage-id>`
+  - 或 npmjs.com → Staged Packages 页面
+- 即使 CI 或工作流被改动，发布也只能停在 staging，**没有批准不会公开**
+- `publish_workflow` 传 `stage: true` 生成这种工作流
+
+## 工作流由维护者掌控
+
+- 把 `.github/workflows/` 纳入分支保护 / 必需审核，作者无法改发布步骤
+- Trusted Publisher 绑定「仓库 + 工作流文件名（+ 可选 environment）」，作者不接触工作流
+
+## 无 GitHub 账号的作者
+
+- npm 没有「无账号也能成为发布者」的机制；这种情况下由维护者仓库发布
+- 署名靠 `package.json` 的 `author` / `contributors` + `SUBMISSION.md` 的约定，**不是注册表功能**
+- 不要承诺「账号所有权转移」——npm 对这种情况的处理未经验证
+
 ## 维护者（你）的角色
 
 - 提供 `release.yml` 模板、检查包质量、审核提交的 commit
