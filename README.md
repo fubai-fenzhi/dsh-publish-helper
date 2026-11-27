@@ -11,6 +11,7 @@ DSH 插件上架 / 发布 / 撤回助手：发现、检查、生成 entry、开 
 - `templates/skill-plugin/`：**技能 + 插件**搭配模板，复制即用
 - `templates/release.yml`：GitHub Actions 发版工作流
 - `docs/plugin-vs-skill.md`：插件 vs 技能选型一页指南
+- `docs/ecosystem.md`：**生态定位**——插件配技能一套、互操作约定、token 账、交付清单
 
 `publish_workflow` 默认写 **trusted publishing** 工作流（GitHub OIDC，无需长期 token）；需要 secret 时传 `mode: "token"`。
 
