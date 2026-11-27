@@ -476,24 +476,29 @@ export function apply(ctx, rawConfig) {
 
   ctx.tools.register({
     name: 'publish_workflow',
-    description: 'Write the GitHub Actions release workflow into a local package directory (.github/workflows/release.yml). Default mode trusted: npm publishes through GitHub OIDC with provenance and no long-lived token; mode token injects NODE_AUTH_TOKEN from the NPM_TOKEN secret.',
+    description: 'Write the GitHub Actions release workflow into a local package directory (.github/workflows/release.yml). Default mode trusted: npm publishes through GitHub OIDC with provenance and no long-lived token; mode token injects NODE_AUTH_TOKEN from the NPM_TOKEN secret. stage=true uses npm stage publish so a maintainer still approves each release with 2FA (npm CLI 11.15+, Node 22.14+).',
     parameters: objectSchema({
       dir: { type: 'string', description: 'Absolute package directory.' },
       mode: { type: 'string', enum: WORKFLOW_MODES, description: 'trusted (default, needs npm Trusted Publisher) or token (needs the NPM_TOKEN secret).' },
+      stage: { type: 'boolean', description: 'true = npm stage publish: CI stages the version and a maintainer approves it with 2FA before it becomes public.' },
     }, ['dir']),
     output: textOutput,
     async execute(args) {
       const directory = String(args.dir);
       if (!existsSync(join(directory, 'package.json'))) throw new Error(`no package.json in ${directory}`);
       const mode = args.mode ?? 'trusted';
-      const template = workflowText(mode);
+      const stage = args.stage === true;
+      const template = workflowText(mode, { stage });
       const target = join(directory, '.github', 'workflows', 'release.yml');
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, template, 'utf8');
-      const hint = mode === 'trusted'
-        ? 'configure npm -> package -> Settings -> Trusted publishing (GitHub Actions, this repo, release.yml), then push a v* tag'
-        : 'add the repository secret NPM_TOKEN, then push a v* tag';
-      return { text: `wrote ${target}\nmode: ${mode}\nnext: ${hint}` };
+      const authHint = mode === 'trusted'
+        ? 'configure npm -> package -> Settings -> Trusted publishing (GitHub Actions, this repo, release.yml)'
+        : 'add the repository secret NPM_TOKEN';
+      const stageHint = stage
+        ? '; the workflow runs npm stage publish, so approve each release with `npm stage approve <stage-id>` or on the npm Staged Packages page'
+        : '';
+      return { text: `wrote ${target}\nmode: ${mode}${stage ? ' + staged' : ''}\nnext: ${authHint}${stageHint}, then push a v* tag` };
     },
     presentCall: present('Write release workflow'),
   });
