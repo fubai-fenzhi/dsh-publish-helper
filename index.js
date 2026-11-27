@@ -480,14 +480,14 @@ export function apply(ctx, rawConfig) {
     parameters: objectSchema({
       dir: { type: 'string', description: 'Absolute package directory.' },
       mode: { type: 'string', enum: WORKFLOW_MODES, description: 'trusted (default, needs npm Trusted Publisher) or token (needs the NPM_TOKEN secret).' },
-      stage: { type: 'boolean', description: 'true = npm stage publish: CI stages the version and a maintainer approves it with 2FA before it becomes public.' },
+      stage: { type: 'boolean', description: 'true (default) = npm stage publish: CI stages the version and a maintainer approves it with 2FA before it becomes public. Set false for direct publish.' },
     }, ['dir']),
     output: textOutput,
     async execute(args) {
       const directory = String(args.dir);
       if (!existsSync(join(directory, 'package.json'))) throw new Error(`no package.json in ${directory}`);
       const mode = args.mode ?? 'trusted';
-      const stage = args.stage === true;
+      const stage = args.stage !== false;
       const template = workflowText(mode, { stage });
       const target = join(directory, '.github', 'workflows', 'release.yml');
       mkdirSync(dirname(target), { recursive: true });
