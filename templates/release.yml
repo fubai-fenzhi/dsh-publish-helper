@@ -1,18 +1,20 @@
 # Copy to .github/workflows/release.yml in the package repository.
 #
-# Two publishing modes (pick one):
+# Modes:
+#   trusted (default): npm exchanges the GitHub OIDC token for a short-lived
+#     credential; configure npm -> package -> Settings -> Trusted publishing
+#     (GitHub Actions, this repository, release.yml).
+#   token: inject NODE_AUTH_TOKEN from the NPM_TOKEN secret.
 #
-#   trusted (default, no long-lived token):
-#     1. npm package page -> Settings -> Trusted publishing -> GitHub Actions,
-#        publisher = this repository, workflow = release.yml, environment = (empty)
-#     2. push a v* tag; npm exchanges the GitHub OIDC token for a short-lived credential
+# Staged publishing (stage=true): the workflow runs `npm stage publish`; the
+# package stays private until a maintainer approves it with 2FA
+# (`npm stage approve <stage-id>` or the Staged Packages page on npmjs.com).
+# This is how a maintainer keeps the final publish gate even when CI runs the
+# build. Requires npm CLI 11.15.0+ and Node 22.14+.
 #
-#   token (fallback):
-#     add a repository secret NPM_TOKEN = granular npm token
-#     (Read and write, Bypass 2FA; never commit it) and push a v* tag
-#
-# Granular tokens that bypass 2FA cannot unpublish and are being restricted for
-# direct publishing, so prefer trusted publishing when the npm account has 2FA.
+# Maintainer-owned workflow: keep this file under branch protection / required
+# reviewers for .github/workflows/ so contributors cannot change the publish
+# step without review.
 name: release
 
 on:
@@ -38,7 +40,7 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Use the npm CLI that supports provenance
+      - name: Use the npm CLI that supports provenance and staged publish
         run: npm install -g npm@latest
 
       - name: Verify the tag matches package.json
@@ -64,5 +66,5 @@ jobs:
           fi
 
       - name: Publish with provenance
-        run: npm publish --provenance --access public --ignore-scripts
+        run: __PUBLISH_CMD__ --provenance --access public --ignore-scripts
 __NODE_AUTH_ENV__
