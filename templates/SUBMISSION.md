@@ -12,8 +12,14 @@
 - 是否有 GitHub 账号：是 / 否（handle：）
 - 是否有 npm 账号：是 / 否（handle：）
 - 提交方式：自己开 PR / 请维护者代提
-- 发布方式：自己发 npm / 统一由维护者代发
+- 发布方式：自己发 npm / **Trusted Publishing（作者仓库 CI 代发，零凭证共享，推荐）** / 统一由维护者代发
 - 代提/代发授权（选「请维护者」时必填）：允许维护者代开 PR、代发 npm、保留作者署名、可随时下架/转回
+
+## Trusted Publishing（推荐，无凭证共享）
+
+- 作者在 npm 包设置里配置 Trusted Publisher（GitHub Actions，仓库 + `release.yml`）
+- 工作流由 `dsh-publish-helper` 的 `publish_workflow` 生成（`mode: trusted`）
+- 作者保留撤销权 / 可加 environment 人工审批；维护者不持有凭证
 
 ## 源码
 
@@ -27,6 +33,7 @@
 - 是否使用 org scope（如 @dsh-community/xxx）：
 - 当前 npm 版本（如已发布）：
 - 是否需要代发：是 / 否
+- 代发方式：Trusted Publishing（推荐）/ 维护者代发
 - 代发授权（代发时必填）：允许维护者发布、保留署名、可随时下架/转回
 
 ## 撤回
