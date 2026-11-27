@@ -226,6 +226,19 @@ function walkFiles(root, current = root, out = []) {
 export function apply(ctx, rawConfig) {
   const cfg = normalize(rawConfig);
 
+  // The HTTP routes expose GitHub/npm actions and the owner's credentials, so each
+  // request must pass Connection's Host/Origin and browser-authentication checks.
+  const trustCheck = (headers) => {
+    const connection = typeof ctx.get === 'function' ? ctx.get('connection') : undefined;
+    if (!connection || typeof connection.requestRejection !== 'function') return null;
+    try {
+      return connection.requestRejection({ headers }) ?? null;
+    } catch {
+      return 403;
+    }
+  };
+
+
   // Every agent running with this plugin sees the submission contract without asking.
   if (cfg.guide) {
     const attached = new Set();
@@ -652,6 +665,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/check',
     resource: async (request) => {
+      const denied = trustCheck(request.headers);
+      if (denied) {
+        return new Response(JSON.stringify({ error: '请求来源校验未通过' }), {
+          status: denied,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const url = new URL(request.url);
       const input = url.searchParams.get('repo') ?? '';
       let resolved;
@@ -674,6 +695,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/audit',
     resource: async (request) => {
+      const denied = trustCheck(request.headers);
+      if (denied) {
+        return new Response(JSON.stringify({ error: '请求来源校验未通过' }), {
+          status: denied,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const url = new URL(request.url);
       const { token } = await resolveGithubToken(cfg);
       const repos = (url.searchParams.get('repos') ?? '').split(',').map((item) => item.trim()).filter(Boolean);
@@ -694,6 +723,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/preflight',
     resource: async (request) => {
+      const denied = trustCheck(request.headers);
+      if (denied) {
+        return new Response(JSON.stringify({ error: '请求来源校验未通过' }), {
+          status: denied,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const url = new URL(request.url);
       return Response.json(preflightPackage(url.searchParams.get('dir') ?? ''));
     },
@@ -703,6 +740,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/publish',
     handler: async (req, res) => {
+      const denied = trustCheck(req.headers);
+      if (denied) {
+        res.statusCode = denied;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: '请求来源校验未通过' }));
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
       if (req.method !== 'POST') {
         res.statusCode = 405;
@@ -732,6 +777,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/recall',
     handler: async (req, res) => {
+      const denied = trustCheck(req.headers);
+      if (denied) {
+        res.statusCode = denied;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: '请求来源校验未通过' }));
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
       if (req.method !== 'POST') {
         res.statusCode = 405;
@@ -769,6 +822,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/intake',
     handler: async (req, res) => {
+      const denied = trustCheck(req.headers);
+      if (denied) {
+        res.statusCode = denied;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: '请求来源校验未通过' }));
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
       const dir = inboxDir();
       try {
@@ -806,6 +867,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/review-queue',
     resource: async (request) => {
+      const denied = trustCheck(request.headers);
+      if (denied) {
+        return new Response(JSON.stringify({ error: '请求来源校验未通过' }), {
+          status: denied,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       const url = new URL(request.url);
       const local = readLocalConfig();
       const param = url.searchParams.get('repos');
@@ -827,7 +896,14 @@ export function apply(ctx, rawConfig) {
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
     path: '/dsh-publish-helper/review-history',
-    resource: async () => {
+    resource: async (request) => {
+      const denied = trustCheck(request.headers);
+      if (denied) {
+        return new Response(JSON.stringify({ error: '请求来源校验未通过' }), {
+          status: denied,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const items = readReviews()
         .slice()
         .sort((left, right) => String(right.at).localeCompare(String(left.at)))
@@ -840,6 +916,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/review',
     handler: async (req, res) => {
+      const denied = trustCheck(req.headers);
+      if (denied) {
+        res.statusCode = denied;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: '请求来源校验未通过' }));
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
       const { token } = await resolveGithubToken(cfg);
       if (!token) {
@@ -903,6 +987,14 @@ export function apply(ctx, rawConfig) {
     kind: 'exact',
     path: '/dsh-publish-helper/config',
     handler: async (req, res) => {
+      const denied = trustCheck(req.headers);
+      if (denied) {
+        res.statusCode = denied;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: '请求来源校验未通过' }));
+        return;
+      }
+
       res.setHeader('Content-Type', 'application/json');
       if (req.method === 'GET') {
         const local = readLocalConfig();
