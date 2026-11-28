@@ -24,6 +24,12 @@ test('stage option switches to npm stage publish', () => {
   assert.ok(workflowText('trusted').includes('npm publish'));
 });
 
+test('re-running a tag for an already published version skips publish', () => {
+  const text = workflowText('trusted', { stage: true });
+  assert.ok(text.includes('Skip publish when this version already exists'));
+  assert.ok(text.includes("steps.published.outputs.skip != 'true'"));
+});
+
 test('unknown mode is rejected', () => {
   assert.throws(() => workflowText('nope'), /unknown mode/);
   assert.deepEqual(WORKFLOW_MODES, ['trusted', 'token']);
