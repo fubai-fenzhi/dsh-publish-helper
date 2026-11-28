@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 
 import { auditPackages, npmWhoami } from './lib/audit.mjs';
@@ -17,6 +17,8 @@ import { DEFAULT_ORG, orgArgs } from './lib/org.mjs';
 import { preflightPackage } from './lib/preflight.mjs';
 import { listReviewQueue, readReviews, saveReview } from './lib/reviews.mjs';
 import { releasePackage } from './lib/release.mjs';
+import { acquireReleaseLock, assertReleaseTag, readPackage } from './lib/release-policy.mjs';
+import { assertReleaseApproved, markReleasePublished } from './lib/coordination.mjs';
 import { prepareManifest } from './lib/manifest.mjs';
 import { DEFAULT_SUBMISSIONS_REPO, reviewPullRequest, submitPackage } from './lib/submissions.mjs';
 import { DEFAULT_REGISTRY_REPO, forkAndOpenPr, generateEntry } from './lib/publish.mjs';
@@ -386,18 +388,41 @@ export function apply(ctx, rawConfig) {
 
   ctx.tools.register({
     name: 'publish_npm',
-    description: 'Publish a package directory to npm now with the resolved npm token (npm publish --ignore-scripts --access public). Use it after bumping the version; pass otp when the token does not bypass 2FA.',
+    description: 'Publish a package directory to npm now with the resolved npm token (npm publish --ignore-scripts --access public). Refuses an untagged direct publish when the GitHub repository already uses release tags; use publish_tag for tagged releases. Pass allowUntagged only for an explicit, logged exception.',
     parameters: objectSchema({
       dir: { type: 'string', description: 'Absolute package directory to publish.' },
       tag: { type: 'string', description: 'npm dist-tag (default: latest).' },
       otp: { type: 'string', description: 'Optional 2FA one-time code.' },
       force: { type: 'boolean', description: 'Publish even when preflight fails (only after manual review).' },
+      allowUntagged: { type: 'boolean', description: 'Explicitly allow publishing without a matching vX.Y.Z tag (exception; logged).' },
+      allowUnapproved: { type: 'boolean', description: 'Explicitly allow publishing without an approved workbench release request (exception; logged).' },
     }, ['dir']),
     output: textOutput,
     async execute(args) {
       await enforceNpmMaintainer(cfg);
-      const result = await publishDirectory({ dir: args.dir, tag: args.tag, otp: args.otp, force: args.force === true });
-      return { text: `${result.name}@${result.version}\n${result.output || 'published'}` };
+      const pkg = readPackage(String(args.dir));
+      const { token } = await resolveGithubToken(cfg);
+      await assertReleaseTag({
+        dir: String(args.dir),
+        token,
+        allowUntagged: args.allowUntagged === true,
+      });
+      const approved = await assertReleaseApproved({
+        pkg: pkg.name,
+        version: pkg.version,
+        allowUnapproved: args.allowUnapproved === true,
+      });
+      const lock = acquireReleaseLock({
+        path: join(homedir(), '.dsh', 'publish-helper-release.lock'),
+        meta: { tool: 'publish_npm', dir: String(args.dir) },
+      });
+      try {
+        const result = await publishDirectory({ dir: args.dir, tag: args.tag, otp: args.otp, force: args.force === true });
+        await markReleasePublished({ id: approved.id, pkg: pkg.name, version: pkg.version }).catch(() => {});
+        return { text: `${result.name}@${result.version}\n${result.output || 'published'}` };
+      } finally {
+        lock.release();
+      }
     },
     presentCall: present('Publish package to npm'),
   });
@@ -450,21 +475,41 @@ export function apply(ctx, rawConfig) {
       repo: { type: 'string', description: 'Repository as owner/name; defaults to the package.json repository.' },
       bump: { type: 'string', enum: ['patch', 'minor', 'major'], description: 'Version bump (default patch).' },
       version: { type: 'string', description: 'Explicit version instead of a bump.' },
+      allowUnapproved: { type: 'boolean', description: 'Explicitly allow releasing without an approved workbench request (exception; logged).' },
     }, ['dir']),
     output: textOutput,
     async execute(args) {
       const { token } = await resolveGithubToken(cfg);
       if (!token) throw new Error('run gh auth login, or save a GitHub token first');
-      const result = await releasePackage({
-        dir: args.dir,
-        token,
-        repo: args.repo,
-        bump: args.bump ?? 'patch',
-        version: args.version,
+      const lock = acquireReleaseLock({
+        path: join(homedir(), '.dsh', 'publish-helper-release.lock'),
+        meta: { tool: 'publish_tag', dir: String(args.dir) },
       });
-      return {
-        text: `released ${result.repo} ${result.tag}\ncommit: ${result.commit.slice(0, 7)}\nCI 已触发；staging 版本需要在 npm 页面 Approve`,
-      };
+      try {
+        let approvedId = null;
+        const result = await releasePackage({
+          dir: args.dir,
+          token,
+          repo: args.repo,
+          bump: args.bump ?? 'patch',
+          version: args.version,
+          beforeRelease: async ({ name, version }) => {
+            const approved = await assertReleaseApproved({
+              pkg: name,
+              version,
+              allowUnapproved: args.allowUnapproved === true,
+            });
+            approvedId = approved.id ?? null;
+          },
+        });
+        const released = readPackage(String(args.dir));
+        await markReleasePublished({ id: approvedId, pkg: released.name, version: released.version }).catch(() => {});
+        return {
+          text: `released ${result.repo} ${result.tag}\ncommit: ${result.commit.slice(0, 7)}\nCI 已触发；staging 版本需要在 npm 页面 Approve`,
+        };
+      } finally {
+        lock.release();
+      }
     },
     presentCall: present('Tag a release'),
   });
@@ -765,7 +810,29 @@ export function apply(ctx, rawConfig) {
         return;
       }
       try {
-        res.end(JSON.stringify({ ok: true, ...(await publishDirectory({ dir: body?.dir, tag: body?.tag, otp: body?.otp, force: body?.force === true })) }));
+        const { token } = await resolveGithubToken(cfg);
+        await assertReleaseTag({
+          dir: String(body?.dir ?? ''),
+          token,
+          allowUntagged: body?.allowUntagged === true,
+        });
+        const pkg = readPackage(String(body?.dir ?? ''));
+        const approved = await assertReleaseApproved({
+          pkg: pkg.name,
+          version: pkg.version,
+          allowUnapproved: body?.allowUnapproved === true,
+        });
+        const lock = acquireReleaseLock({
+          path: join(homedir(), '.dsh', 'publish-helper-release.lock'),
+          meta: { tool: 'panel', dir: String(body?.dir ?? '') },
+        });
+        try {
+          const result = await publishDirectory({ dir: body?.dir, tag: body?.tag, otp: body?.otp, force: body?.force === true });
+          await markReleasePublished({ id: approved.id, pkg: pkg.name, version: pkg.version }).catch(() => {});
+          res.end(JSON.stringify({ ok: true, ...result }));
+        } finally {
+          lock.release();
+        }
       } catch (error) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: String(error).replace(/^Error:\s*/, '') }));
